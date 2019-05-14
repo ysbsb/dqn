@@ -94,7 +94,7 @@ resize = T.Compose([T.ToPILImage(),
                     T.ToTensor()])
 
 
-def get_cart_location(screen_width):
+def get_cart_location(screen_width, screen_height):
     world_width = env.x_threshold * 2
     scale = screen_width / world_width
     return int(env.state[0] * scale + screen_width / 2.0)  # MIDDLE OF CART
@@ -125,6 +125,15 @@ def get_screen():
     # Resize, and add a batch dimension (BCHW)
     return resize(screen).unsqueeze(0).to(device)
 
+def get_state():
+    # Returned screen requested by gym is 400x600x3, but is sometimes larger
+    # such as 800x1200x3. Transpose it into torch order (CHW).
+    # TODO: Get width and heigth of images
+    responses = client.simGetImages([airsim.ImageRequest(3, airsim.ImageType.DepthPerspective, True, False)])
+    state = transform_input(responses)
+
+    return state
+
 
 env.reset()
 plt.figure()
@@ -145,15 +154,15 @@ TARGET_UPDATE = 10
 # Get screen size so that we can initialize layers correctly based on shape
 # returned from AI gym. Typical dimensions at this point are close to 3x40x90
 # which is the result of a clamped and down-scaled render buffer in get_screen()
-init_screen = get_screen()
-_, _, screen_height, screen_width = init_screen.shape
+init_state = get_state()
+_, _, image_height, image_width = init_state.shape
 
 # Get number of actions from gym action space
 # TODO: Get action space of multirotor environment
 n_actions = env.action_space.n
 
-policy_net = DQN(screen_height, screen_width, n_actions).to(device)
-target_net = DQN(screen_height, screen_width, n_actions).to(device)
+policy_net = DQN(image_height, image_width, n_actions).to(device)
+target_net = DQN(image_height, image_width, n_actions).to(device)
 target_net.load_state_dict(policy_net.state_dict())
 target_net.eval()
 
@@ -283,8 +292,6 @@ for i_episode in range(num_episodes):
         reward = torch.tensor([reward], device=device)
 
         # Observe new state
-        last_screen = current_screen
-        current_screen = get_screen()
         if not done:
             responses = client.simGetImages([airsim.ImageRequest(3, airsim.ImageType.DepthPerspective, True, False)])
             next_state = transform_input(responses)

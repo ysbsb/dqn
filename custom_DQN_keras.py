@@ -283,8 +283,6 @@ for i_episode in range(num_episodes):
         reward = torch.tensor([reward], device=device)
 
         # Observe new state
-        last_screen = current_screen
-        current_screen = get_screen()
         if not done:
             responses = client.simGetImages([airsim.ImageRequest(3, airsim.ImageType.DepthPerspective, True, False)])
             next_state = transform_input(responses)
